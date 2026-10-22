@@ -1,0 +1,14 @@
+[project]
+name = "fastapi-learning"
+version = "0.1.0"
+description = "Step-by-step FastAPI lessons, from hello world to auth, databases, websockets and testing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.146.0",
+    "pwdlib[argon2]>=0.3.1",
+    "pydantic-settings>=2.16.0",
+    "pyjwt>=2.15.1",
+    "pytest>=9.1.1",
+    "sqlmodel>=0.0.48",
+]
