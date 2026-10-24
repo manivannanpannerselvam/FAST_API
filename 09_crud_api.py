@@ -23,6 +23,7 @@ class BookCreate(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     author: str = Field(min_length=1, max_length=50)
     price: float = Field(gt=0)
+    
 
 
 class BookUpdate(BaseModel):
@@ -33,6 +34,7 @@ class BookUpdate(BaseModel):
 
 class Book(BookCreate):
     id: int
+     # optional field with default value
 
 
 # --- Step 2: the in-memory "database" and an id counter -----------------------
