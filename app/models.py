@@ -50,6 +50,43 @@ class BookPublic(SQLModel):
     id: int
 
 
+# --- Lesson 12, Step 2a: users ------------------------------------------------
+# The table has the HASH, never the password. The table is called "users"
+# (plural) because "user" is a reserved word in PostgreSQL.
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)  # the database enforces unique
+    hashed_password: str
+
+
+# What the client sends to register.
+class UserCreate(SQLModel):
+    username: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=3,
+            max_length=20,
+            pattern=r"^[A-Za-z0-9_]+$",  # letters, digits and underscore only
+        ),
+    ]
+    password: str = Field(min_length=6, max_length=72)
+
+
+# What we return: NO password, NO hash.
+class UserPublic(SQLModel):
+    id: int
+    username: str
+
+
+# What login returns (the names are the OAuth2 standard).
+class Token(SQLModel):
+    access_token: str
+    token_type: str
+
+
 # --- Step 5a: what GET /authors returns ---------------------------------------
 # Not a table: it is a summary computed from the book table.
 class AuthorPublic(SQLModel):

@@ -335,6 +335,8 @@ DELETE http://127.0.0.1:8000/books/1
 Run: `uv run fastapi dev app/main.py` (from the project root, not from inside `app/`)
 
 **Books:** the same URLs and payloads as Lesson 10.
+Since Lesson 12, `POST`, `PUT`, `PATCH` and `DELETE` on `/books` also need the login token header (see Lesson 12).
+`GET` requests stay open.
 
 **Authors** (GET only, no payload)
 ```
@@ -346,17 +348,148 @@ Author names must match exactly, including capital letters.
 
 ---
 
+## Lesson 12 - Authentication (login and token)
+Run: `uv run fastapi dev app/main.py` (same app as Lesson 11, now with users and login)
+
+Flow: **1. register once, 2. login to get a token, 3. send the token on every protected request.**
+The token is valid for 30 minutes. After that you get a 401 error, so login again.
+
+**Step 1: Register a user (once)**
+```
+POST http://127.0.0.1:8000/auth/register
+```
+Header:
+```
+Content-Type: application/json
+```
+Payload:
+```json
+{
+  "username": "mani",
+  "password": "secret123"
+}
+```
+- `username`: 3-20 characters, letters, digits and `_` only.
+- `password`: 6-72 characters.
+- Registering the same username again gives a 409 error.
+
+**Step 2: Login to get the token**
+```
+POST http://127.0.0.1:8000/auth/login
+```
+Header:
+```
+Content-Type: application/x-www-form-urlencoded
+```
+Payload (form fields, **not JSON**; in Postman choose Body, then x-www-form-urlencoded):
+```
+username=mani
+password=secret123
+```
+Response:
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "bearer"
+}
+```
+```bash
+curl -X POST http://127.0.0.1:8000/auth/login -d "username=mani&password=secret123"
+```
+A wrong username or password gives a 401 error.
+
+**Step 3: Use the token on protected requests**
+
+These need the header below: `POST`, `PUT`, `PATCH` and `DELETE` on `/books`.
+`GET` requests need no header.
+```
+Authorization: Bearer eyJhbGciOi...
+```
+In Postman: Authorization tab, Type **Bearer Token**, paste only the token (without the word `Bearer`).
+
+Example, create a book:
+```
+POST http://127.0.0.1:8000/books
+```
+Headers:
+```
+Authorization: Bearer eyJhbGciOi...
+Content-Type: application/json
+```
+Payload:
+```json
+{
+  "title": "Clean Code",
+  "author": "Robert Martin",
+  "price": 30,
+  "page": 464
+}
+```
+
+Example, replace a book:
+```
+PUT http://127.0.0.1:8000/books/4
+```
+Headers: `Authorization: Bearer <token>` and `Content-Type: application/json`
+```json
+{
+  "title": "FAST API tutorial v2 put",
+  "author": "Manivannan v2",
+  "price": 35,
+  "page": 501
+}
+```
+
+Example, change part of a book:
+```
+PATCH http://127.0.0.1:8000/books/4
+```
+Headers: `Authorization: Bearer <token>` and `Content-Type: application/json`
+```json
+{
+  "price": 25
+}
+```
+
+Example, delete a book (no payload):
+```
+DELETE http://127.0.0.1:8000/books/4
+```
+Header: `Authorization: Bearer <token>`
+
+**Errors**
+
+| You see | Reason |
+|---|---|
+| `401 Not authenticated` | no `Authorization` header on a protected request |
+| `401 Could not validate credentials` | token is wrong, edited or expired. Login again |
+| `422` on login | you sent JSON. Send form fields instead |
+
+**Postman tip: save the token automatically.** In the Login request, open the Scripts tab (Tests in older Postman) and add:
+```javascript
+pm.environment.set("token", pm.response.json().access_token);
+```
+Then in other requests use Bearer Token with the value `{{token}}`. Select an environment in Postman (top right).
+
+**Secret key:** tokens are signed with `SECRET_KEY`. The code has a learning-only default.
+On a real server set your own: `SECRET_KEY=$(openssl rand -hex 32)`.
+
+---
+
 ## Project layout
 ```
 Fast_API/
 ├── 01_hello_world.py ... 10_database.py     lessons 1-10
-├── app/                                     lesson 11
+├── app/                                     lessons 11-12
 │   ├── main.py            creates the app and plugs in the routers
 │   ├── database.py        connection and session
-│   ├── models.py          table and request/response models
+│   ├── models.py          tables and request/response models
+│   ├── security.py        password hashing and tokens
+│   ├── dependencies.py    get_current_user (the login check)
 │   └── routers/
 │       ├── books.py       /books endpoints
-│       └── authors.py     /authors endpoints
+│       ├── authors.py     /authors endpoints
+│       └── auth.py        /auth/register and /auth/login
 ├── pyproject.toml / uv.lock
 └── README.md
 ```

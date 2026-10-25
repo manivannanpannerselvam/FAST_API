@@ -5,10 +5,11 @@ All the /books endpoints, in an APIRouter instead of directly on `app`.
 main.py plugs this router into the app (Step 4).
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 
 from app.database import SessionDep
+from app.dependencies import get_current_user
 from app.models import Book, BookBase, BookPublic, BookUpdate
 
 # --- Step 3a: the router ------------------------------------------------------
@@ -18,7 +19,13 @@ router = APIRouter(prefix="/books", tags=["books"])
 
 
 # --- Step 3b: CREATE -> POST /books -------------------------------------------
-@router.post("", response_model=BookPublic, status_code=201)
+# Lesson 12: dependencies=[Depends(get_current_user)] = "must be logged in".
+@router.post(
+    "",
+    response_model=BookPublic,
+    status_code=201,
+    dependencies=[Depends(get_current_user)],
+)
 def create_book(book: BookBase, session: SessionDep):
     # Refuse duplicates (same title + same author). 409 = "clashes with
     # something that already exists".
@@ -61,7 +68,9 @@ def get_book(book_id: int, session: SessionDep):
 
 # --- Step 3e: UPDATE (replace) -> PUT /books/{id} -----------------------------
 # PUT = send the WHOLE book again; every field is required (BookBase).
-@router.put("/{book_id}", response_model=BookPublic)
+@router.put(
+    "/{book_id}", response_model=BookPublic, dependencies=[Depends(get_current_user)]
+)
 def replace_book(book_id: int, book: BookBase, session: SessionDep):
     db_book = session.get(Book, book_id)
     if db_book is None:
@@ -76,7 +85,9 @@ def replace_book(book_id: int, book: BookBase, session: SessionDep):
 # --- Step 3f: UPDATE (partial) -> PATCH /books/{id} ---------------------------
 # PATCH = send ONLY the fields to change. exclude_unset=True drops the
 # fields the client did not send, so they keep their old values.
-@router.patch("/{book_id}", response_model=BookPublic)
+@router.patch(
+    "/{book_id}", response_model=BookPublic, dependencies=[Depends(get_current_user)]
+)
 def update_book(book_id: int, changes: BookUpdate, session: SessionDep):
     db_book = session.get(Book, book_id)
     if db_book is None:
@@ -89,7 +100,7 @@ def update_book(book_id: int, changes: BookUpdate, session: SessionDep):
 
 
 # --- Step 3g: DELETE -> DELETE /books/{id} ------------------------------------
-@router.delete("/{book_id}")
+@router.delete("/{book_id}", dependencies=[Depends(get_current_user)])
 def delete_book(book_id: int, session: SessionDep):
     db_book = session.get(Book, book_id)
     if db_book is None:
