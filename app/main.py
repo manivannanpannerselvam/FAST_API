@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.database import create_db_and_tables
-from app.routers import auth, authors, books
+from app.routers import auth, authors, books, chat
 
 
 # --- Step 4a: run code once at startup ----------------------------------------
@@ -34,3 +34,4 @@ app = FastAPI(title="Lesson 11 - Routers", lifespan=lifespan)
 app.include_router(books.router)
 app.include_router(authors.router)  # Step 5: one more line = a whole new resource
 app.include_router(auth.router)  # Lesson 12
+app.include_router(chat.router)  # Lesson 13

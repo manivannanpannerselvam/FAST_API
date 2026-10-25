@@ -153,7 +153,7 @@ POST http://127.0.0.1:8000/users-created          (same, but returns status 201)
 {
   "username": "mani",
   "email": "mani@example.com",
-  "password": "secret123"
+  "password": "<your-password>"
 }
 ```
 
@@ -176,7 +176,7 @@ POST http://127.0.0.1:8000/users
 {
   "username": "mani",
   "email": "mani@example.com",
-  "password": "secret123"
+  "password": "<your-password>"
 }
 ```
 
@@ -206,7 +206,7 @@ GET http://127.0.0.1:8000/products?limit=1
 GET http://127.0.0.1:8000/db-status
 ```
 
-**These need a header:** `X-API-Key: secret-key-123` (without it you get a 401 error)
+**These need a header:** `X-API-Key: <api-key>` (the demo key is defined in `08_dependencies.py`; without it you get a 401 error)
 ```
 GET http://127.0.0.1:8000/secure-data
 GET http://127.0.0.1:8000/me
@@ -214,7 +214,7 @@ GET http://127.0.0.1:8000/admin/stats
 GET http://127.0.0.1:8000/admin/logs
 ```
 ```bash
-curl http://127.0.0.1:8000/secure-data -H "X-API-Key: secret-key-123"
+curl http://127.0.0.1:8000/secure-data -H "X-API-Key: <api-key>"
 ```
 
 ---
@@ -366,7 +366,7 @@ Payload:
 ```json
 {
   "username": "mani",
-  "password": "secret123"
+  "password": "<your-password>"
 }
 ```
 - `username`: 3-20 characters, letters, digits and `_` only.
@@ -384,7 +384,7 @@ Content-Type: application/x-www-form-urlencoded
 Payload (form fields, **not JSON**; in Postman choose Body, then x-www-form-urlencoded):
 ```
 username=mani
-password=secret123
+password=<your-password>
 ```
 Response:
 ```json
@@ -394,7 +394,7 @@ Response:
 }
 ```
 ```bash
-curl -X POST http://127.0.0.1:8000/auth/login -d "username=mani&password=secret123"
+curl -X POST http://127.0.0.1:8000/auth/login -d "username=mani&password=<your-password>"
 ```
 A wrong username or password gives a 401 error.
 
@@ -471,8 +471,131 @@ pm.environment.set("token", pm.response.json().access_token);
 ```
 Then in other requests use Bearer Token with the value `{{token}}`. Select an environment in Postman (top right).
 
-**Secret key:** tokens are signed with `SECRET_KEY`. The code has a learning-only default.
-On a real server set your own: `SECRET_KEY=$(openssl rand -hex 32)`.
+**Secret key:** login tokens are signed with a key read from the `SECRET_KEY` environment variable
+(create one with `openssl rand -hex 32`). If it is not set, a temporary key is used and you must
+log in again after every restart. Never put the key in the code or in git.
+
+---
+
+## Lesson 13 - AI chat (Gemini + your books database)
+Run: `uv run fastapi dev app/main.py`
+
+`POST /chat` sends your message to Gemini. For questions about your books or authors, Gemini
+asks your API to look the data up in PostgreSQL. All other questions Gemini answers by itself.
+
+```
+                      POST /chat  {"message": "..."}
+                              |
+                              v
+                  check the login token (401 if missing)
+                              |
+                              v
+                       call Gemini with 3 tools
+                  (search_books, list_authors, count_books)
+                              |
+              +---------------+----------------+
+              |                                |
+     question about books              any other question
+     or authors                        (e.g. "What is FastAPI?")
+              |                                |
+   Gemini asks for a tool                      |
+   -> your API queries PostgreSQL              |
+   -> Gemini writes the answer                 |
+              |                                |
+              v                                v
+   source = "gemini+database"           source = "gemini"
+              |                                |
+              +---------------+----------------+
+                              |
+                              v
+        {"answer": "...", "source": "...", "tools_used": [...]}
+```
+
+**One-time setup:** put your Gemini key in an environment variable, in the terminal where you start the server.
+Do not write the key in any file in this repo.
+```bash
+export GEMINI_API_KEY="<your-gemini-key>"
+uv run fastapi dev app/main.py
+```
+Optional: `GEMINI_MODEL` changes the model (default `gemini-3.5-flash-lite`).
+
+**Step 1: Login to get a token** (see Lesson 12)
+```
+POST http://127.0.0.1:8000/auth/login
+Content-Type: application/x-www-form-urlencoded
+```
+```
+username=mani
+password=<your-password>
+```
+
+**Step 2: Chat**
+```
+POST http://127.0.0.1:8000/chat
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+Payload, a question about your books:
+```json
+{
+  "message": "What books does Manivannan have?"
+}
+```
+Response `200`:
+```json
+{
+  "answer": "The books by Manivannan are: 1. FAST API tutorial (Price: 31, Pages: 500) ...",
+  "source": "gemini+database",
+  "tools_used": ["search_books"]
+}
+```
+
+Payload, a general question:
+```json
+{
+  "message": "What is FastAPI? Answer in one sentence."
+}
+```
+Response `200`:
+```json
+{
+  "answer": "FastAPI is a modern, fast web framework for building APIs with Python.",
+  "source": "gemini",
+  "tools_used": []
+}
+```
+
+More messages to try:
+```json
+{ "message": "List all authors" }
+{ "message": "How many books are in the database?" }
+{ "message": "Show me books with tutorial in the title" }
+```
+
+**How to read the response**
+
+| `source` | Meaning |
+|---|---|
+| `gemini+database` | Gemini asked for your database. `tools_used` shows which function ran |
+| `gemini` | Gemini answered from its own knowledge. It does not know your data, so a book answer here may be a guess |
+
+**The tools** ([app/tools.py](app/tools.py)): `search_books(title, author)`, `list_authors()`, `count_books()`.
+They only read data. Gemini decides when to use them from their names and docstrings.
+
+**Errors**
+
+| Status | Message | Reason |
+|---|---|---|
+| 401 | Not authenticated / Could not validate credentials | no token, or a bad or expired token |
+| 422 | String should have at least 1 character | empty message (max 1000 characters) |
+| 429 | AI quota reached, try again later | Gemini quota or rate limit |
+| 502 | The AI service returned an error / Could not reach the AI service | Gemini failed or is unreachable |
+| 503 | Chat is not configured on the server | `GEMINI_API_KEY` is not set |
+| 504 | The AI service took too long to answer | no answer within 30 seconds |
+
+To see what happened inside, read the server terminal. Each chat prints `Gemini: calling ...`, then
+`Gemini: tool called -> ...` for every database lookup, then `Gemini: answered in ...s, tokens in=.. out=..`.
 
 ---
 
@@ -480,16 +603,19 @@ On a real server set your own: `SECRET_KEY=$(openssl rand -hex 32)`.
 ```
 Fast_API/
 ├── 01_hello_world.py ... 10_database.py     lessons 1-10
-├── app/                                     lessons 11-12
+├── app/                                     lessons 11-13
 │   ├── main.py            creates the app and plugs in the routers
 │   ├── database.py        connection and session
 │   ├── models.py          tables and request/response models
 │   ├── security.py        password hashing and tokens
 │   ├── dependencies.py    get_current_user (the login check)
+│   ├── llm.py             talks to Gemini, hands it the tools
+│   ├── tools.py           functions Gemini may call (read-only)
 │   └── routers/
 │       ├── books.py       /books endpoints
 │       ├── authors.py     /authors endpoints
-│       └── auth.py        /auth/register and /auth/login
+│       ├── auth.py        /auth/register and /auth/login
+│       └── chat.py        /chat endpoint
 ├── pyproject.toml / uv.lock
 └── README.md
 ```

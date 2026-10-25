@@ -6,7 +6,9 @@ that cannot be turned back into the password. To check a login, we hash what
 the user typed and compare it with the stored hash.
 """
 
+import logging
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -29,12 +31,15 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 # --- Lesson 12, Step 3a: JWT settings -----------------------------------------
-# SECRET_KEY signs every token. Anyone who knows it can forge tokens, so on a
-# real server set it as an environment variable. This default is for learning
-# only. (Make a good one with:  openssl rand -hex 32)
-SECRET_KEY = os.getenv(
-    "SECRET_KEY", "learning-only-secret-change-me-on-a-real-server-0123456789"
-)
+# SECRET_KEY signs every token. It is read from an environment variable and is
+# never written in the code. Create one with:  openssl rand -hex 32
+# If it is not set, a random key is made for this run only: the app still works,
+# but every restart invalidates old tokens, so you have to log in again.
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_hex(32)
+if not os.getenv("SECRET_KEY"):
+    logging.getLogger("uvicorn.error").warning(
+        "SECRET_KEY is not set: using a temporary random key (logins reset on restart)"
+    )
 ALGORITHM = "HS256"
 TOKEN_MINUTES = 30
 

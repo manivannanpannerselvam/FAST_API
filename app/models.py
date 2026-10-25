@@ -87,6 +87,24 @@ class Token(SQLModel):
     token_type: str
 
 
+# --- Lesson 13, Step 3a: chat -------------------------------------------------
+# What the client sends. The length cap keeps one request from being huge
+# (you pay for every token you send to the AI).
+class ChatRequest(SQLModel):
+    message: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+    ]
+
+
+# What we return.
+class ChatResponse(SQLModel):
+    answer: str
+    # "gemini"           = Gemini answered on its own
+    # "gemini+database"  = Gemini asked for your database (see tools_used)
+    source: str
+    tools_used: list[str]
+
+
 # --- Step 5a: what GET /authors returns ---------------------------------------
 # Not a table: it is a summary computed from the book table.
 class AuthorPublic(SQLModel):
